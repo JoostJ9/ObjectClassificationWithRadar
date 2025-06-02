@@ -63,7 +63,7 @@ drawnow
 
 %% Cepstogram
 % Compute cepstogram for a selected range bin (e.g., bin 20)
-selected_bin = 10;
+selected_bin = 15;
 signal = Data_range_MTI(selected_bin, :);
 
 % Parameters
