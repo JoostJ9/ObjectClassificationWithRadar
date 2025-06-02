@@ -12,6 +12,10 @@
 % specific data file
 %==========================================================================
 %% Data reading part
+clear      % removes all variables
+clc        % clears the command window
+close all  % closes all open figure windows
+
 [filename,pathname] = uigetfile('*.dat');
 fileID = fopen(filename, 'r');
 dataArray = textscan(fileID, '%f');
@@ -53,9 +57,47 @@ imagesc(20*log10(abs(Data_range_MTI)))
 xlabel('No. of Sweeps')
 ylabel('Range bins')
 title('Range Profiles after MTI filter')
-clim = get(gca,'CLim'); axis xy; ylim([1 100])
+clim = get(gca,'CLim'); axis xy; %ylim([1 100])
 set(gca, 'CLim', clim(2)+[-60,0]);
 drawnow
+
+%% Cepstogram
+% Compute cepstogram for a selected range bin (e.g., bin 20)
+selected_bin = 10;
+signal = Data_range_MTI(selected_bin, :);
+
+% Parameters
+window_length = 256;
+overlap = round(0.9 * window_length);
+step = window_length - overlap;
+num_frames = floor((length(signal) - window_length) / step) + 1;
+
+cepstrogram = [];
+for k = 1:num_frames
+    idx = (1:window_length) + (k-1)*step;
+    frame = signal(idx) .* hann(window_length).'; % windowed signal
+    
+    % Compute cepstrum: log|FFT| → IFFT
+    spectrum = fft(frame);
+    log_mag = log(abs(spectrum) + eps); % add eps to avoid log(0)
+    cepstrum = abs(ifft(log_mag));
+    
+    % Store only first part of cepstrum (quefrency axis)
+    cepstrogram(:,k) = cepstrum(1:round(window_length/2));
+end
+
+% Quefrency axis
+quefrency = (0:round(window_length/2)-1)/fs;
+time_axis = (0:num_frames-1)*step/fs;
+
+% Plot cepstogram
+figure
+imagesc(time_axis, quefrency*1e3, 20*log10(cepstrogram));
+axis xy; colormap jet; colorbar
+xlabel('Time [s]')
+ylabel('Quefrency [ms]')
+title(sprintf('Cepstogram - Range Bin %d', selected_bin))
+
 
 %% Spectrogram processing for 2nd FFT to get Doppler
 % This selects the range bins where we want to calculate the spectrogram
