@@ -2,7 +2,7 @@
 # ================================================================
 #   INSHEP bulk-feature extractor — **multicore version**
 #   ▪  Spawns one worker per logical CPU (max 12 on your machine)
-#   ▪  Streams results straight into CSV  (appends row-by-row)
+#   ▪  Streams results straight into CSV (overwrites existing file)
 #   ▪  Totally self-contained: just place this script beside the
 #       datasets/  directory and  python fast_extract.py
 # ================================================================
@@ -28,7 +28,8 @@ except ImportError:
 # ──────────────────────────────────────────────────────────────
 #  GLOBAL CONSTANTS
 # ──────────────────────────────────────────────────────────────
-DATASETS_ROOT   = Path("datasets")
+# --- MODIFIED PATH ---
+DATASETS_ROOT   = Path("C:/Users/Adnane/Desktop/Radar/ObjectClassificationWithRadar/datasets")
 CSV_PATH        = "INSHEP_features.csv"
 
 ACTIVITY_MAP = {
@@ -54,6 +55,9 @@ FIELDNAMES = [
     "max_vel", "amp_density", "kurtosis", "zernike_moment",
     "periodicity", "mean_torso_power", "pos_neg_ratio",
     "doppler_offset", "main_lobe_width",
+    # Added features
+    "motion_duration", "doppler_peak_velocity", "doppler_symmetry_index",
+    "cepstral_entropy", "range_bin_span", "doppler_bandwidth",
 ]
 
 # ──────────────────────────────────────────────────────────────
@@ -159,6 +163,50 @@ def extract_features(mti, fc, Tsweep):
     else:
         main_lobe_width = 0.0
 
+    # --- NEW FEATURES START ---
+
+    # Motion Duration: Duration of signal above a threshold in the time domain.
+    nperseg = TIME_WINDOW
+    noverlap = int(round(nperseg * OVERLAP_FRAC))
+    time_step = (nperseg - noverlap) / prf
+    motion_thresh = pw_sweep.max() * (10**(DENSITY_THR_DB / 10))
+    motion_duration = float((pw_sweep >= motion_thresh).sum() * time_step)
+
+    # Average Doppler Spectrum features
+    avg_doppler_spectrum = S2.mean(axis=1)
+
+    # Doppler Peak Velocity: Velocity at the peak of the time-averaged Doppler spectrum.
+    doppler_peak_velocity = float(v_axis[avg_doppler_spectrum.argmax()])
+
+    # Doppler Symmetry Index: Normalized difference between positive and negative Doppler power.
+    pos_mask = v_axis > 0
+    neg_mask = v_axis < 0
+    pos_power_avg = avg_doppler_spectrum[pos_mask].sum()
+    neg_power_avg = avg_doppler_spectrum[neg_mask].sum()
+    doppler_symmetry_index = float((pos_power_avg - neg_power_avg) / (pos_power_avg + neg_power_avg + 1e-12))
+
+    # Cepstral Entropy: Entropy of the power cepstrum of the average Doppler spectrum.
+    log_spec = np.log(avg_doppler_spectrum + 1e-12)
+    cepstrum = np.abs(np.fft.irfft(log_spec))**2
+    p_cep = cepstrum / (cepstrum.sum() + 1e-12)
+    cepstral_entropy = float(-(p_cep * np.log(p_cep + 1e-12)).sum())
+
+    # Range Bin Span: Spread of the signal across range bins.
+    range_power = np.sum(np.abs(mti)**2, axis=1)
+    range_thresh = range_power.max() * (10**(DENSITY_THR_DB / 10))
+    active_bins_mask = range_power >= range_thresh
+    if active_bins_mask.any():
+        active_indices = np.where(active_bins_mask)[0]
+        range_bin_span = float(active_indices.max() - active_indices.min())
+    else:
+        range_bin_span = 0.0
+
+    # Doppler Bandwidth: Power-weighted standard deviation of the Doppler velocity.
+    doppler_variance = (weights * (v_axis - doppler_offset)**2).sum() / (weights.sum() + 1e-12)
+    doppler_bandwidth = float(np.sqrt(doppler_variance))
+
+    # --- NEW FEATURES END ---
+
     return dict(
         mean_entropy       = mean_entropy,
         mean_power         = mean_power,
@@ -173,6 +221,13 @@ def extract_features(mti, fc, Tsweep):
         pos_neg_ratio      = pos_neg_ratio,
         doppler_offset     = doppler_offset,
         main_lobe_width    = main_lobe_width,
+        # Added features
+        motion_duration        = motion_duration,
+        doppler_peak_velocity  = doppler_peak_velocity,
+        doppler_symmetry_index = doppler_symmetry_index,
+        cepstral_entropy       = cepstral_entropy,
+        range_bin_span         = range_bin_span,
+        doppler_bandwidth      = doppler_bandwidth, # Corrected: Feature is now included
     )
 
 
@@ -198,31 +253,33 @@ def main():
         print(f"No .dat files found under {DATASETS_ROOT.resolve()}")
         return
 
-    # prepare CSV (append if exists, else create with header)
-    csv_exists = os.path.exists(CSV_PATH)
-    csv_file   = open(CSV_PATH, "a", newline="")
-    writer     = csv.DictWriter(csv_file, FIELDNAMES)
-    if not csv_exists:
-        writer.writeheader()
+    # === CORRECTED SECTION START ===
+    # Open the CSV file in "w" (write) mode. This will create a new file
+    # or overwrite an existing one, preventing duplicate entries from
+    # previous runs. The 'with' statement ensures the file is properly closed.
+    with open(CSV_PATH, "w", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=FIELDNAMES)
+        writer.writeheader()  # Always write the header for a new/overwritten file
 
-    max_workers = min(12, cpu_count())    # 12 logical procs on your PC
-    print(f"• Processing {n_files} files with {max_workers} workers …")
+        max_workers = min(12, cpu_count())
+        print(f"• Processing {n_files} files with {max_workers} workers from {DATASETS_ROOT}…")
 
-    with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        future_to_path = {pool.submit(process_one, p): p for p in all_files}
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            future_to_path = {pool.submit(process_one, p): p for p in all_files}
 
-        for i, fut in enumerate(as_completed(future_to_path), 1):
-            p = future_to_path[fut]
-            try:
-                row = fut.result()
-                writer.writerow(row)
-                csv_file.flush()          # ensure on-disk immediately
-                print(f"✓ [{i:>4}/{n_files}] {row['file_id']}")
-            except Exception as e:
-                print(f"✗ [{i:>4}/{n_files}] {p.name}: {e}")
+            for i, fut in enumerate(as_completed(future_to_path), 1):
+                p = future_to_path[fut]
+                try:
+                    row = fut.result()
+                    writer.writerow(row)
+                    # Flushing ensures data is written to disk, useful for monitoring progress
+                    csv_file.flush()
+                    print(f"✓ [{i:>4}/{n_files}] {row['file_id']}")
+                except Exception as e:
+                    print(f"✗ [{i:>4}/{n_files}] {p.name}: {e}")
+    # === CORRECTED SECTION END ===
 
-    csv_file.close()
-    print(f"\n✅  Done.  All features appended to  {CSV_PATH}")
+    print(f"\n✅  Done.  All features have been written to  {CSV_PATH}")
 
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
