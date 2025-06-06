@@ -1,3 +1,5 @@
 datasets/*
 spectrograms/*
 Project_description.pdf
+Crop_cfar_images/spectrograms_CFAR_processed/*
+Crop_cfar_images/spectrograms_CFAR/*
