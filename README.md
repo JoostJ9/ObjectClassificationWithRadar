@@ -43,6 +43,9 @@ Other pre-trained models are included in the notebook but were not used in the f
 
 ## Spectrogram Generation
 
+### `ObjectClassification.ipynb`
+This notebook implements radar signal preprocessing and spectrogram-based micro-Doppler analysis for human activity classification.
+
 ### `create_spectrograms.py`
 Generates time-Doppler spectrograms from raw radar `.dat` files. These spectrograms are needed before you can run `creating_embeddings_transfer_learning.ipynb`.
 
