@@ -24,7 +24,7 @@ The final solution combines supervised and unsupervised features to achieve **94
 
 The following image illustrates the complete pipeline used in this project, from raw radar data processing to final activity classification.
 
-![Pipeline Overview](figures/Pipeline.pdf)
+![Pipeline Overview](figures/Pipeline.png)
 
 ## Main Notebooks
 
