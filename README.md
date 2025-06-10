@@ -20,6 +20,12 @@ The final solution combines supervised and unsupervised features to achieve **94
 | **Macro avg**  | 0.94      | 0.94   | 0.94     | 351     |
 | **Weighted avg** | 0.94    | 0.94   | 0.94     | 351     |
 
+## Pipeline Overview
+
+The following image illustrates the complete pipeline used in this project, from raw radar data processing to final activity classification.
+
+![Pipeline Overview](pipeline.png)
+
 ## Main Notebooks
 
 ### `combining_and_training.ipynb`
@@ -43,6 +49,7 @@ Generates time-Doppler spectrograms from raw radar `.dat` files. These spectrogr
 **Requirements:** This script uses multiprocessing and can be resource-intensive. Make sure you have raw `.dat` radar files in a `datasets/` directory.
 
 
+
 ## Authors
 
 - J.H.F. Jaspers - [j.h.f.jaspers@student.tudelft.nl](mailto:j.h.f.jaspers@student.tudelft.nl)
@@ -53,4 +60,3 @@ Faculty of Electrical Engineering, Mathematics & Computer Science, TU Delft
 
 ---
 
-© 2025. Released under the MIT License.
