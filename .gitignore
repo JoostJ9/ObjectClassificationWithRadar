@@ -4,3 +4,5 @@ Project_description.pdf
 Crop_cfar_images/spectrograms_CFAR_processed/*
 Crop_cfar_images/spectrograms_CFAR/*
 spectrograms.zip
+spectrograms_limb_envelope/*
+spectrograms_torso_removed/*
